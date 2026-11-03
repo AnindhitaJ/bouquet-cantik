@@ -1,0 +1,18 @@
+:root{--bg:#fff4f6;--card:#fff;--ink:#2a1620;--mut:#7d6670;--pri:#b3305a;--on:#fff;--line:#f1d9e0;--soft:#fbe3ea}
+@media(prefers-color-scheme:dark){:root{--bg:#1a1217;--card:#251a21;--ink:#f8eaef;--mut:#b9a0aa;--pri:#ec7aa0;--on:#2a1220;--line:#3b2a33;--soft:#35222b;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,sans-serif}
+header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0}
+a{color:inherit}.logo{font-weight:800;font-size:19px;color:var(--pri);text-decoration:none}.logo small{display:block;font-size:12px;color:var(--mut);font-weight:400}
+main{max-width:960px;margin:0 auto;padding:20px 16px 90px}footer{text-align:center;color:var(--mut);font-size:14px;padding:20px 16px 90px}
+h1{font-size:32px;line-height:1.15;margin:0 0 8px}.price{color:var(--pri);font-weight:700}.mut{color:var(--mut)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden;text-decoration:none;display:block}.card div{padding:10px 12px 14px}
+.card img,.det img,.ph{width:100%;aspect-ratio:1;object-fit:cover;display:block}.ph{display:grid;place-items:center;font-size:72px;background:var(--soft)}
+.det{display:grid;gap:18px}@media(min-width:700px){.det{grid-template-columns:1fr 1fr}}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+label{display:block;font-weight:600;font-size:14px;margin:12px 0 4px}.chk{font-weight:400}.chk input{width:auto}
+input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:16px inherit}
+.btn{display:block;width:100%;text-align:center;background:var(--pri);color:var(--on);border:0;border-radius:12px;padding:13px;font:600 16px inherit;cursor:pointer;text-decoration:none;margin-top:14px}.btn.alt{background:var(--soft);color:var(--ink)}.btn.sm{display:inline-block;width:auto;padding:6px 12px;font-size:14px;margin:0}
+.sum{display:flex;justify-content:space-between;padding:4px 0}.err{color:#c0392b;font-weight:600;margin-top:10px}
+.wa{position:fixed;right:14px;bottom:14px;background:#1f8f4e;color:#fff;padding:12px 18px;border-radius:99px;text-decoration:none;font-weight:600}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
