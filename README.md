@@ -2,7 +2,7 @@
 HTML + JavaScript biasa, tanpa build. Data & login admin: Supabase. Foto: Cloudflare R2 lewat 1 Worker kecil.
 
 ## Setup
-1. **Supabase**: buat project, jalankan `supabase/schema.sql` (SQL Editor). Buat 1 user admin (Authentication > Users), matikan *Allow new users to sign up*.
+1. **Supabase**: jalankan `supabase/schema.sql` di SQL Editor. Lalu di Settings > API > *Exposed schemas* tambahkan `bouquet`. Buat user admin (Authentication > Users) dan daftarkan lewat baris `insert into bouquet.admins` di akhir file SQL.
 2. Isi `js/config.js` dengan Project URL dan anon key (aman dipublikasikan, akses dijaga RLS).
 3. **R2**: buat bucket `bouquet-cantik`, sambungkan custom domain (mis. `img.domainanda.id`).
 4. **Worker**: `cd worker`, isi `wrangler.toml` (SUPABASE_URL, SUPABASE_ANON_KEY, domain), lalu `npx wrangler deploy`. Isi `UPLOAD_URL` di `js/config.js` dengan URL Worker.
