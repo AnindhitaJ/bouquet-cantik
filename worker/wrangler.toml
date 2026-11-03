@@ -1,0 +1,11 @@
+name = "bouquet-upload"
+main = "upload.js"
+compatibility_date = "2025-01-01"
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "bouquet-cantik"
+[vars]
+ALLOW_ORIGIN = "https://domainanda.id"
+PUBLIC_URL = "https://img.domainanda.id"
+SUPABASE_URL = ""
+SUPABASE_ANON_KEY = ""
