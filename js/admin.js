@@ -26,8 +26,9 @@ async function upload(file) {
   try {
     const { data } = await db.auth.getSession();
     const r = await fetch(CFG.UPLOAD_URL, { method: "PUT", headers: { "Content-Type": "image/webp", Authorization: "Bearer " + data.session.access_token }, body: await toWebp(file) });
-    if (!r.ok) throw 0; f.image_url = (await r.json()).url; produk();
-  } catch { $("msg").textContent = "Upload gagal. Cek URL Worker dan CORS."; }
+    if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
+    f.image_url = (await r.json()).url; produk();
+  } catch (e) { $("msg").textContent = "Upload gagal: " + (e.message && e.message != "Failed to fetch" ? e.message : "diblokir browser (CORS) atau Worker tidak terjangkau"); }
 }
 async function saveP() {
   keep(); if (!f.name || !f.price) return $("msg").textContent = "Nama dan harga wajib diisi.";
