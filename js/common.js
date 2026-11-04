@@ -1,4 +1,4 @@
-const db = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+const db = supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, { db: { schema: "bouquet" } });
 const $ = (i) => document.getElementById(i);
 const rp = (n) => "Rp" + (n || 0).toLocaleString("id-ID");
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
