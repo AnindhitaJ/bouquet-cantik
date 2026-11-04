@@ -1,1 +1,1 @@
-window.CFG = { SUPABASE_URL: "https://wbkvfvdajsfuntrdtyjx.supabase.co", SUPABASE_ANON_KEY: "sb_publishable_pKwTo8GAtEdrCfdTBNMizw_MaqAM3kV", UPLOAD_URL: "https://bouquet-upload.NAMAANDA.workers.dev" };
+window.CFG = { SUPABASE_URL: "https://wbkvfvdajsfuntrdtyjx.supabase.co", SUPABASE_ANON_KEY: "sb_publishable_pKwTo8GAtEdrCfdTBNMizw_MaqAM3kV", UPLOAD_URL: "https://bouquet-upload.dhitajo2004.workers.dev" };
