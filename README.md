@@ -10,7 +10,10 @@ HTML + JavaScript biasa, tanpa build. Data & login admin: Supabase. Foto: Cloudf
 6. Ganti `domainanda.id` di `sitemap.xml`, `robots.txt`, dan `index.html` (canonical + JSON-LD) dengan domain asli. Admin ada di `/admin/`.
 
 ## Sudah ada
-Toko (katalog, detail, add-on, keranjang, checkout tamu, promo, ongkir per area, WhatsApp), wording SEO area di halaman utama, admin login, CRUD produk + upload R2, kelola pesanan.
+Toko (katalog, cek pesanan pembeli, detail, add-on, keranjang, checkout tamu, promo, ongkir per area, WhatsApp), wording SEO area di halaman utama, admin login, CRUD produk + upload R2, kelola pesanan.
+
+## Admin
+Produk (+ add-on per produk), Pesanan, Laporan (omzet, terlaris, CSV), Add-on, Promo, Pengaturan (WA, rekening, ongkir per area). Pembeli bisa cek pesanan dengan nomor pesanan + HP.
 
 ## Berikutnya
-Admin add-on, promo, pengaturan, laporan omzet; cek pesanan pembeli.
+Notifikasi pesanan baru, stok/kuota harian.
