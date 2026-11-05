@@ -1,5 +1,7 @@
-let settings = {}, areas = [], cur = null, last = null, cart = JSON.parse(localStorage.getItem("cart") || "[]");
+let settings = {}, areas = [], cur = null, last = null, prods = [], cats = [], cat = -1, q = "", sort = "new", promo = "", cart = JSON.parse(localStorage.getItem("cart") || "[]");
 const save = () => { localStorage.setItem("cart", JSON.stringify(cart)); const n = cart.reduce((s, i) => s + i.qty, 0); $("cnt").textContent = n; $("cnt").hidden = !n; };
+const sub = () => cart.reduce((x, i) => x + i.unit * i.qty, 0);
+const OCC = { "Ulang tahun": "Selamat ulang tahun! Semoga selalu bahagia dan sehat.", "Anniversary": "Selamat anniversary. Terima kasih sudah menemani sampai hari ini.", "Romantis": "Untukmu yang selalu di hati.", "Selamat": "Selamat atas pencapaianmu! Kami ikut bangga.", "Wisuda": "Selamat wisuda! Semoga ilmunya berkah dan sukses selalu.", "Duka cita": "Turut berduka cita. Semoga keluarga diberi kekuatan dan ketabahan." };
 async function boot() {
   const [s, a] = await Promise.all([db.from("settings").select().maybeSingle(), db.from("areas").select().eq("active", true).order("name")]);
   settings = s.data || {}; areas = a.data || [];
@@ -7,62 +9,95 @@ async function boot() {
   save(); route();
 }
 async function route() {
-  const h = location.hash.slice(1); $("seo").hidden = !!h; document.body.classList.toggle("focus", h.startsWith("p-") || h == "keranjang"); document.querySelectorAll("nav.bottom a").forEach((x) => x.classList.toggle("on", x.getAttribute("href") === "#" + h)); $("app").innerHTML = '<p class="mut">Memuat…</p>';
-  $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "pesanan" ? pesananView() : h == "keranjang" ? checkout() : h == "selesai" && last ? done() : await home();
-  scrollTo(0, 0); if (h == "keranjang") upd();
+  const h = location.hash.slice(1); $("seo").hidden = !!h; document.body.classList.remove("s");
+  $("app").innerHTML = '<p class="mut">Memuat…</p>';
+  $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "pesanan" ? pesananView() : h == "keranjang" ? cartView() : h == "checkout" ? checkout() : h == "selesai" && last ? done() : await home();
+  scrollTo(0, 0); if (h == "checkout") upd();
 }
-let prods = [], cats = [], q = "", cat = -1;
 const ico = (c) => /wisuda/i.test(c) ? "🎓" : /romant|anniv|valent/i.test(c) ? "💖" : /ulang|birth/i.test(c) ? "🎂" : /duka|bela/i.test(c) ? "🕊️" : "💐";
-const card = (p) => `<a class="card" href="#p-${p.id}"><div class="ph-wrap">${imgTag(p)}</div><div class="meta"><span class="cn">${esc(p.name)}</span><b class="pr">${rp(p.price)}</b></div></a>`;
-function gridHtml() {
-  const l = prods.filter((p) => (cat < 0 || p.category == cats[cat]) && (p.name + " " + (p.category || "")).toLowerCase().includes(q.toLowerCase()));
-  return l.map(card).join("") || '<p class="mut" style="grid-column:1/-1">Belum ada buket yang cocok. Coba kata kunci lain atau hubungi kami lewat WhatsApp.</p>';
+const thumb = (c) => { const p = prods.find((x) => x.category == c && x.image_url); return p ? `<img src="${esc(p.image_url)}" alt="">` : ico(c); };
+const pimgs = (p) => p.images?.length ? p.images : (p.image_url ? [p.image_url] : []);
+const priceHtml = (p) => p.compare_price > p.price ? `<s class="was">${rp(p.compare_price)}</s><b class="pr">${rp(p.price)}</b><span class="off">${Math.round((1 - p.price / p.compare_price) * 100)}%</span>` : `<b class="pr">${rp(p.price)}</b>`;
+const gallery = (p) => { const a = pimgs(p); return a.length ? `<div class="gal">${a.length > 1 ? `<div class="thumbs-v">${a.map((u, i) => `<button type="button" class="th${i ? "" : " on"}" onclick="showImg(${i})" aria-label="Foto ${i + 1}"><img src="${esc(u)}" alt=""></button>`).join("")}</div>` : ""}<div class="gmain"><img id="gm" src="${esc(a[0])}" alt="${esc(p.name)}"></div></div>` : '<div class="gal"><div class="gmain"><div class="ph">💐</div></div></div>'; };
+const showImg = (i) => { $("gm").src = pimgs(cur.p)[i]; document.querySelectorAll(".th").forEach((b, j) => b.classList.toggle("on", j == i)); };
+const card = (p) => `<a class="card" href="#p-${p.id}"><div class="ph-wrap">${imgTag(p)}</div><div class="meta"><span class="cn">${esc(p.name)}</span><div class="pw">${priceHtml(p)}</div></div></a>`;
+function lst() {
+  let l = prods.filter((p) => (cat < 0 || p.category == cats[cat]) && (p.name + " " + (p.category || "")).toLowerCase().includes(q.toLowerCase()));
+  if (sort == "lo") l = [...l].sort((a, b) => a.price - b.price); if (sort == "hi") l = [...l].sort((a, b) => b.price - a.price);
+  return l;
 }
-const catsHtml = () => [["💐", "Semua", -1], ...cats.map((c, i) => [ico(c), c, i])].map(([i, l, n]) => `<button class="cat${n == cat ? " on" : ""}" onclick="setCat(${n})"><span class="ico">${i}</span>${esc(l)}</button>`).join("");
-function paint() { if ($("grid")) { $("cats").innerHTML = catsHtml(); $("grid").innerHTML = gridHtml(); } }
+const gridHtml = () => lst().map(card).join("") || '<p class="mut" style="grid-column:1/-1">Belum ada buket yang cocok. Coba kata kunci lain atau hubungi kami lewat WhatsApp.</p>';
+const catsHtml = () => [["Semua", -1], ...cats.map((c, i) => [c, i])].map(([l, n]) => `<button class="cat${n == cat ? " on" : ""}" onclick="setCat(${n})"><span class="ico">${n < 0 ? (prods.find((p) => p.image_url) ? thumb(prods.find((p) => p.image_url).category) : "💐") : thumb(l)}</span>${esc(l)}</button>`).join("");
+function paint() { if ($("grid")) { $("cats").innerHTML = catsHtml(); $("grid").innerHTML = gridHtml(); $("cn").textContent = lst().length + " buket"; } }
 function setCat(n) { cat = n; paint(); }
 function setQ(v) { q = v; if (location.hash.length > 1) location.hash = ""; else paint(); }
+const toCat = () => $("katalog").scrollIntoView({ behavior: "smooth" });
 async function home() {
   const { data } = await db.from("products").select().eq("active", true).order("created_at", { ascending: false });
   prods = data || []; cats = [...new Set(prods.map((p) => p.category).filter(Boolean))]; if (cat >= cats.length) cat = -1;
-  return `<div class="banner"><div><b>Buket segar, dikirim sesuai jadwal</b><span>Pilih tanggal dan jam kirim sendiri. Tanpa akun.</span></div><span class="bi">💐</span></div><div class="cats" id="cats">${catsHtml()}</div><div class="sec"><b>Semua buket</b><span>Cibubur, Depok, Bogor dan sekitarnya</span></div><div class="grid" id="grid">${gridHtml()}</div>`;
+  const hp = prods.find((p) => p.image_url);
+  const T = [["📅", "Pilih jadwal kirim", "Tentukan tanggal dan jam sesuai kebutuhan."], ["💌", "Kartu ucapan", "Tulis pesan khusus untuk penerima."], ["🧾", "Tanpa akun", "Cukup isi data, lalu transfer."], ["💬", "Konfirmasi WhatsApp", "Kirim bukti transfer, kami proses."]];
+  return `<section class="hero"><div><h1>Buket Bunga Segar</h1><p>Buket segar yang dirangkai dengan teliti untuk menyampaikan rasa sayang dan momen spesial.</p><a class="btn" href="#" onclick="toCat();return false">Lihat buket</a></div><div class="hero-img">${hp ? `<img src="${esc(hp.image_url)}" alt="${esc(hp.name)}">` : "<span>💐</span>"}</div></section>
+  <h2 class="sech">Pilihan Kami</h2><div class="cats" id="cats">${catsHtml()}</div>
+  <div class="bar" id="katalog"><span id="cn">${prods.length} buket</span><label class="sort">Urutkan <select onchange="sort=this.value;paint()">${[["new", "Terbaru"], ["lo", "Harga terendah"], ["hi", "Harga tertinggi"]].map(([v, l]) => `<option value="${v}"${v == sort ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
+  <div class="grid" id="grid">${gridHtml()}</div>
+  <div class="trust">${T.map(([i, t, d]) => `<div><span>${i}</span><b>${t}</b><small>${d}</small></div>`).join("")}</div>`;
 }
 async function detail(id) {
   const { data: p } = await db.from("products").select().eq("id", id).eq("active", true).maybeSingle();
   if (!p) return '<p>Produk tidak ditemukan.</p><a class="btn" href="#">Ke katalog</a>';
   const { data: pa } = await db.from("product_addons").select("addons(*)").eq("product_id", id);
   cur = { p, ad: (pa || []).map((x) => x.addons).filter((a) => a && a.active) };
-  return `<a class="back" href="#">‹ Kembali</a><div class="det">${imgTag(p)}<div><h1>${esc(p.name)}</h1><p class="price">${rp(p.price)}</p><p>${esc(p.description || "")}</p>
-  ${cur.ad.length ? "<label>Tambahan</label>" + cur.ad.map((a) => `<label class="chk"><input type="checkbox" class="ad" value="${a.id}"> ${esc(a.name)} (+${rp(a.price)})</label>`).join("") : ""}
-  <label for="qty">Jumlah</label><input id="qty" type="number" min="1" value="1"><button class="btn" onclick="addCart()">Tambah ke keranjang</button></div></div>`;
+  const { data: rl } = await db.from("products").select().eq("active", true).neq("id", id).order("created_at", { ascending: false }).limit(12);
+  const rel = (rl || []).sort((a, b) => (b.category == p.category) - (a.category == p.category)).slice(0, 5);
+  const relHtml = rel.length ? `<h2 class="sech" style="margin-top:44px">Mungkin Anda suka</h2><div class="grid">${rel.map(card).join("")}</div>` : "";
+  return `<a class="back" href="#">‹ Kembali</a><div class="det">${gallery(p)}<div class="info"><h1>${esc(p.name)}</h1><div class="price">${priceHtml(p)}</div>
+  <div class="note">Melayani pengiriman: ${areas.map((a) => esc(a.name)).join(", ")}.<br>Pesanan dikonfirmasi lewat WhatsApp.</div>${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
+  <h3 class="step"><i>01</i> Kartu ucapan <small>opsional</small></h3><div class="chips">${Object.keys(OCC).map((k) => `<button type="button" class="chip" onclick="occ('${k}')">${k}</button>`).join("")}</div>
+  <label for="to">Untuk (nama penerima)</label><input id="to"><label for="fr">Dari (nama pengirim)</label><input id="fr"><label for="msg">Pesan</label><textarea id="msg" rows="3" maxlength="200"></textarea>
+  ${cur.ad.length ? `<h3 class="step"><i>02</i> Tambahan</h3>` + cur.ad.map((a) => `<label class="chk"><input type="checkbox" class="ad" value="${a.id}"> ${esc(a.name)} (+${rp(a.price)})</label>`).join("") : ""}
+  <label for="qty">Jumlah</label><input id="qty" type="number" min="1" value="1"><button class="btn blk" onclick="addCart()">Tambah ke keranjang</button>
+  ${settings.whatsapp ? `<p class="help">Butuh bantuan? <a href="https://wa.me/${settings.whatsapp}" target="_blank" rel="noopener">Chat via WhatsApp</a></p>` : ""}</div></div>${relHtml}`;
 }
+const occ = (k) => { $("msg").value = OCC[k]; };
 function addCart() {
   const ids = [...document.querySelectorAll(".ad:checked")].map((x) => x.value), ad = cur.ad.filter((a) => ids.includes(a.id));
-  cart.push({ productId: cur.p.id, name: cur.p.name, qty: Math.max(1, +$("qty").value || 1), unit: cur.p.price + ad.reduce((s, a) => s + a.price, 0), addonIds: ids, addonNames: ad.map((a) => a.name) });
+  cart.push({ productId: cur.p.id, name: cur.p.name, img: cur.p.image_url || "", qty: Math.max(1, +$("qty").value || 1), unit: cur.p.price + ad.reduce((s, a) => s + a.price, 0), addonIds: ids, addonNames: ad.map((a) => a.name), to: $("to").value.trim(), from: $("fr").value.trim(), msg: $("msg").value.trim() });
   save(); location.hash = "keranjang";
 }
-function del(n) { cart.splice(n, 1); save(); route(); }
-function checkout() {
+const redraw = () => { $("app").innerHTML = cartView(); };
+const qty = (n, d) => { cart[n].qty = Math.max(1, cart[n].qty + d); save(); redraw(); };
+const del = (n) => { cart.splice(n, 1); save(); redraw(); };
+function cartView() {
   if (!cart.length) return '<div class="box"><p>Keranjang masih kosong.</p><a class="btn" href="#">Lihat katalog</a></div>';
-  const today = new Date().toISOString().slice(0, 10);
-  return `<h1>Checkout</h1><div class="box">${cart.map((i, n) => `<div class="sum"><span>${i.qty}× ${esc(i.name)}${i.addonNames.length ? " + " + esc(i.addonNames.join(", ")) : ""}</span><span>${rp(i.unit * i.qty)} <button class="btn alt sm" onclick="del(${n})">Hapus</button></span></div>`).join("")}</div>
-  <div class="box"><label for="nm">Nama</label><input id="nm" autocomplete="name"><label for="hp">Nomor HP (WhatsApp)</label><input id="hp" type="tel" autocomplete="tel">
-  <label for="ar">Area</label><select id="ar" onchange="upd()">${areas.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select>
-  <label for="al">Alamat lengkap</label><textarea id="al" rows="3"></textarea>
-  <div class="two"><div><label for="tg">Tanggal kirim</label><input id="tg" type="date" min="${today}"></div><div><label for="jm">Jam kirim</label><select id="jm"><option>09.00–12.00</option><option>12.00–15.00</option><option>15.00–18.00</option></select></div></div>
-  <label for="kt">Kartu ucapan (opsional)</label><textarea id="kt" rows="2"></textarea><label for="pr">Kode promo (opsional)</label><input id="pr"></div>
-  <div class="box"><div class="sum"><span>Subtotal</span><span id="sb"></span></div><div class="sum"><span>Ongkir</span><span id="ok"></span></div><div class="sum"><b>Total (sebelum promo)</b><b id="tt"></b></div></div>
-  <div class="err" id="err" role="alert"></div><button class="btn" id="go" onclick="submit()">Buat pesanan</button>`;
+  return `<h1>Keranjang <span class="pill">${cart.length}</span></h1><div class="two-col"><div>${cart.map((i, n) => `<div class="line">${i.img ? `<img src="${esc(i.img)}" alt="">` : '<div class="ph">💐</div>'}<div class="li"><b>${esc(i.name)}</b><div class="mut">${i.qty} × ${rp(i.unit)}</div>${i.addonNames.length ? `<div class="mut">+ ${esc(i.addonNames.join(", "))}</div>` : ""}${i.to || i.msg ? `<div class="gc"><b>Kartu ucapan</b> untuk ${esc(i.to || "-")}, dari ${esc(i.from || "-")}<br>${esc(i.msg || "")}</div>` : ""}<div class="q"><button onclick="qty(${n},-1)" aria-label="Kurangi">−</button><span>${i.qty}</span><button onclick="qty(${n},1)" aria-label="Tambah">+</button><button class="x" onclick="del(${n})">Hapus</button></div></div><b>${rp(i.unit * i.qty)}</b></div>`).join("")}</div>
+  <aside class="sumbox"><label for="pr">Kode promo</label><input id="pr" value="${esc(promo)}" oninput="promo=this.value.trim()"><div class="sum tot"><span>Estimasi total</span><b>${rp(sub())}</b></div><p class="mut">Ongkir dihitung saat checkout. Potongan promo diterapkan saat pesanan dibuat.</p><a class="btn blk" href="#checkout">Checkout</a></aside></div>`;
+}
+const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const mark = () => document.querySelectorAll(".dc").forEach((b) => b.classList.toggle("on", b.dataset.d == $("tg").value));
+const pickD = (v) => { $("tg").value = v; mark(); };
+const pickT = (b) => { $("jm").value = b.dataset.t; document.querySelectorAll(".tc").forEach((x) => x.classList.toggle("on", x === b)); };
+function checkout() {
+  if (!cart.length) return cartView();
+  const days = [...Array(7)].map((_, i) => { const d = new Date(Date.now() + i * 864e5); return `<button type="button" class="dc" data-d="${ymd(d)}" onclick="pickD('${ymd(d)}')"><b>${i == 0 ? "Hari ini" : i == 1 ? "Besok" : d.toLocaleDateString("id-ID", { weekday: "short" })}</b><span>${d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span></button>`; }).join("");
+  const slots = [["Pagi", "09.00–12.00"], ["Siang", "12.00–15.00"], ["Sore", "15.00–18.00"]].map(([n, t], i) => `<button type="button" class="tc${i ? "" : " on"}" data-t="${t}" onclick="pickT(this)"><b>${n}</b><span>${t}</span></button>`).join("");
+  return `<a class="back" href="#keranjang">‹ Kembali ke keranjang</a><h1>Checkout</h1><div class="two-col"><div>
+  <div class="box"><h3 class="step">Penerima</h3><label for="nm">Nama</label><input id="nm" autocomplete="name"><label for="hp">Nomor HP (WhatsApp)</label><input id="hp" type="tel" autocomplete="tel"></div>
+  <div class="box"><h3 class="step">Alamat</h3><label for="ar">Area pengiriman</label><select id="ar" onchange="upd()">${areas.map((a) => `<option>${esc(a.name)}</option>`).join("")}</select><label for="al">Alamat lengkap</label><textarea id="al" rows="3"></textarea></div>
+  <div class="box"><h3 class="step">Jadwal kirim</h3><div class="dcs">${days}</div><label for="tg">Atau pilih tanggal lain</label><input id="tg" type="date" min="${ymd(new Date())}" onchange="mark()"><label>Jam kirim</label><div class="tcs">${slots}</div><input id="jm" type="hidden" value="09.00–12.00"></div></div>
+  <aside class="sumbox"><h3 class="step">Ringkasan</h3>${cart.map((i) => `<div class="sum"><span>${i.qty}× ${esc(i.name)}</span><span>${rp(i.unit * i.qty)}</span></div>`).join("")}<div class="sum"><span>Subtotal</span><span id="sb"></span></div><div class="sum"><span>Ongkir</span><span id="ok"></span></div>${promo ? `<div class="sum"><span>Kode promo</span><span>${esc(promo)}</span></div>` : ""}<div class="sum tot"><span>Total (sebelum promo)</span><b id="tt"></b></div>
+  <div class="err" id="err" role="alert"></div><button class="btn blk" id="go" onclick="submit()">Buat pesanan</button></aside></div>`;
 }
 function upd() {
-  if (!$("ar")) return; const f = areas.find((a) => a.name == $("ar").value)?.fee || 0, s = cart.reduce((x, i) => x + i.unit * i.qty, 0);
+  if (!$("ar")) return; const f = areas.find((a) => a.name == $("ar").value)?.fee || 0, s = sub();
   $("sb").textContent = rp(s); $("ok").textContent = rp(f); $("tt").textContent = rp(s + f);
 }
 async function submit() {
   const v = (i) => $(i).value.trim(); $("err").textContent = ""; $("go").disabled = true;
-  const { data, error } = await db.rpc("create_order", { p: { name: v("nm"), phone: v("hp"), area: v("ar"), address: v("al"), deliverOn: v("tg"), slot: v("jm"), card: v("kt"), promo: v("pr"), items: cart } });
+  const kartu = cart.filter((i) => i.to || i.from || i.msg).map((i) => `${i.name}: untuk ${i.to || "-"}, dari ${i.from || "-"}. ${i.msg || ""}`).join("\n");
+  const { data, error } = await db.rpc("create_order", { p: { name: v("nm"), phone: v("hp"), area: v("ar"), address: v("al"), deliverOn: v("tg"), slot: v("jm"), card: kartu, promo, items: cart } });
   $("go").disabled = false; if (error) { $("err").textContent = error.message; return; }
-  last = { ...data, name: v("nm") }; cart = []; save(); location.hash = "selesai";
+  last = { ...data, name: v("nm") }; cart = []; promo = ""; save(); location.hash = "selesai";
 }
 function done() {
   const t = encodeURIComponent(`Halo kak Vita, saya sudah transfer untuk pesanan ${last.no} a.n. ${last.name} sebesar ${rp(last.total)}. Berikut bukti transfernya.`);

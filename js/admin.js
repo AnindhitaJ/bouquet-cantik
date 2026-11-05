@@ -10,32 +10,39 @@ async function produk() {
   const { data: l } = await db.from("products").select().order("created_at", { ascending: false });
   const { data: ad } = await db.from("addons").select().order("name");
   if (f.id && !f.aids) f.aids = ((await db.from("product_addons").select("addon_id").eq("product_id", f.id)).data || []).map((x) => x.addon_id);
-  $("app").innerHTML = `<h1>Produk</h1><div class="box"><label for="pn">Nama</label><input id="pn" value="${esc(f.name)}"><div class="two"><div><label for="pc">Kategori</label><input id="pc" value="${esc(f.category)}"></div><div><label for="pp">Harga (Rp)</label><input id="pp" type="number" value="${f.price || ""}"></div></div>
-  <label for="pd">Deskripsi</label><textarea id="pd" rows="2">${esc(f.description)}</textarea><label for="pf">Foto</label><input id="pf" type="file" accept="image/*" onchange="upload(this.files[0])">${f.image_url ? `<img src="${esc(f.image_url)}" alt="" style="width:90px;margin-top:8px;border-radius:8px">` : ""}
+  $("app").innerHTML = `<h1>Produk</h1><div class="box"><label for="pn">Nama</label><input id="pn" value="${esc(f.name)}"><div class="two"><div><label for="pc">Kategori</label><input id="pc" value="${esc(f.category)}"></div><div><label for="pp">Harga (Rp)</label><input id="pp" type="number" value="${f.price || ""}"></div></div><label for="pcmp">Harga normal / coret (opsional, harus lebih besar dari harga)</label><input id="pcmp" type="number" value="${f.compare_price || ""}">
+  <label for="pd">Deskripsi</label><textarea id="pd" rows="2">${esc(f.description)}</textarea><label for="pf">Foto (maks. 6, foto pertama jadi foto utama)</label><input id="pf" type="file" accept="image/*" multiple onchange="upload(this.files)"><div class="thumbs">${imgs(f).map((u, i) => `<div><img src="${esc(u)}" alt=""><span><button type="button" class="btn alt sm" onclick="fotoUtama(${i})">Utama</button><button type="button" class="btn alt sm" onclick="fotoHapus(${i})">Hapus</button></span></div>`).join("")}</div>
   ${(ad || []).length ? "<label>Add-on yang tersedia</label>" + ad.map((a) => `<label class="chk"><input type="checkbox" class="pad" value="${a.id}" ${(f.aids || []).includes(a.id) ? "checked" : ""}> ${esc(a.name)} (+${rp(a.price)})</label>`).join("") : ""}
   <label class="chk"><input id="pa" type="checkbox" ${f.active ? "checked" : ""}> Tampil di toko</label><p class="mut" id="msg"></p><button class="btn" onclick="saveP()">${f.id ? "Simpan perubahan" : "Tambah produk"}</button></div>
   ${(l || []).map((p) => `<div class="box sum"><span><b>${esc(p.name)}</b> ${p.active ? "" : "(disembunyikan)"}<br><span class="price">${rp(p.price)}</span></span><span><button class="btn alt sm" onclick='edit(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Ubah</button> <button class="btn alt sm" onclick="delP('${p.id}')">Hapus</button></span></div>`).join("")}`;
 }
 function edit(p) { f = p; produk(); scrollTo(0, 0); }
-function keep() { f = { ...f, name: $("pn").value, category: $("pc").value, price: +$("pp").value, description: $("pd").value, active: $("pa").checked, aids: [...document.querySelectorAll(".pad:checked")].map((x) => x.value) }; }
+function keep() { f = { ...f, name: $("pn").value, category: $("pc").value, price: +$("pp").value, compare_price: +$("pcmp").value || null, description: $("pd").value, active: $("pa").checked, aids: [...document.querySelectorAll(".pad:checked")].map((x) => x.value) }; }
 async function delP(id) { if (confirm("Hapus produk?")) { await db.from("products").delete().eq("id", id); produk(); } }
 async function toWebp(file) {
   const bm = await createImageBitmap(file), r = Math.min(1, 1000 / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
   c.width = bm.width * r; c.height = bm.height * r; c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
   return new Promise((res) => c.toBlob(res, "image/webp", 0.82));
 }
-async function upload(file) {
-  if (!file) return; keep(); $("msg").textContent = "Mengunggah foto…";
+const imgs = (p) => p.images?.length ? p.images : (p.image_url ? [p.image_url] : []);
+function fotoUtama(i) { keep(); const a = imgs(f); f.images = [a[i], ...a.filter((_, j) => j != i)]; produk(); }
+function fotoHapus(i) { keep(); f.images = imgs(f).filter((_, j) => j != i); produk(); }
+async function upload(files) {
+  if (!files.length) return; keep(); const out = imgs(f).slice(); let err = "";
   try {
     const { data } = await db.auth.getSession();
-    const r = await fetch(CFG.UPLOAD_URL, { method: "PUT", headers: { "Content-Type": "image/webp", Authorization: "Bearer " + data.session.access_token }, body: await toWebp(file) });
-    if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
-    f.image_url = (await r.json()).url; produk();
-  } catch (e) { $("msg").textContent = "Upload gagal: " + (e.message && e.message != "Failed to fetch" ? e.message : "diblokir browser (CORS) atau Worker tidak terjangkau"); }
+    for (const file of [...files].slice(0, Math.max(0, 6 - out.length))) {
+      $("msg").textContent = "Mengunggah foto " + (out.length + 1) + "…";
+      const r = await fetch(CFG.UPLOAD_URL, { method: "PUT", headers: { "Content-Type": "image/webp", Authorization: "Bearer " + data.session.access_token }, body: await toWebp(file) });
+      if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
+      out.push((await r.json()).url);
+    }
+  } catch (e) { err = "Upload gagal: " + (e.message && e.message != "Failed to fetch" ? e.message : "diblokir browser (CORS) atau Worker tidak terjangkau"); }
+  f.images = out; await produk(); if (err) $("msg").textContent = err;
 }
 async function saveP() {
   keep(); if (!f.name || !f.price) return $("msg").textContent = "Nama dan harga wajib diisi.";
-  const row = { name: f.name, category: f.category, price: f.price, description: f.description, image_url: f.image_url, active: f.active };
+  const row = { name: f.name, category: f.category, price: f.price, description: f.description, image_url: imgs(f)[0] || null, images: imgs(f), compare_price: f.compare_price > f.price ? f.compare_price : null, active: f.active };
   const { data: sv, error } = f.id ? await db.from("products").update(row).eq("id", f.id).select().single() : await db.from("products").insert(row).select().single();
   if (error) return $("msg").textContent = "Gagal menyimpan.";
   await db.from("product_addons").delete().eq("product_id", sv.id);
