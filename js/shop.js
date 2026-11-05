@@ -8,7 +8,7 @@ async function boot() {
 }
 async function route() {
   const h = location.hash.slice(1); $("seo").hidden = !!h; $("app").innerHTML = '<p class="mut">Memuat…</p>';
-  $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "keranjang" ? checkout() : h == "selesai" && last ? done() : await home();
+  $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "pesanan" ? pesananView() : h == "keranjang" ? checkout() : h == "selesai" && last ? done() : await home();
   scrollTo(0, 0); if (h == "keranjang") upd();
 }
 async function home() {
@@ -55,5 +55,10 @@ async function submit() {
 function done() {
   const t = encodeURIComponent(`Halo kak Vita, saya sudah transfer untuk pesanan ${last.no} a.n. ${last.name} sebesar ${rp(last.total)}. Berikut bukti transfernya.`);
   return `<div class="box"><h1>Pesanan ${esc(last.no)} dibuat</h1><p>Transfer <b>${rp(last.total)}</b> ke:<br><b>${esc(settings.bank_info)}</b></p><a class="btn" target="_blank" rel="noopener" href="https://wa.me/${settings.whatsapp}?text=${t}">Kirim bukti transfer via WhatsApp</a></div>`;
+}
+function pesananView() { return '<h1>Cek pesanan</h1><div class="box"><label for="cn">Nomor pesanan</label><input id="cn" placeholder="BCV-1001"><label for="ch">Nomor HP saat memesan</label><input id="ch" type="tel"><button class="btn" onclick="cek()">Cek status</button></div><div id="hs" style="margin-top:14px"></div>'; }
+async function cek() {
+  const { data } = await db.rpc("track_order", { p_no: $("cn").value, p_phone: $("ch").value });
+  $("hs").innerHTML = data ? `<div class="box"><b>${esc(data.status)}</b><p>${esc(data.no)} · kirim ${esc(data.deliver_on)}, ${esc(data.slot)} ke ${esc(data.area)}</p>${data.items.map((i) => `<div>${i.q}× ${esc(i.n)}</div>`).join("")}<div class="sum"><b>Total</b><b>${rp(data.total)}</b></div></div>` : '<div class="err">Pesanan tidak ditemukan. Periksa nomor pesanan dan nomor HP.</div>';
 }
 addEventListener("hashchange", route); boot();
