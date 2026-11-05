@@ -1,5 +1,5 @@
 let settings = {}, areas = [], cur = null, last = null, cart = JSON.parse(localStorage.getItem("cart") || "[]");
-const save = () => { localStorage.setItem("cart", JSON.stringify(cart)); $("cnt").textContent = cart.reduce((s, i) => s + i.qty, 0); };
+const save = () => { localStorage.setItem("cart", JSON.stringify(cart)); const n = cart.reduce((s, i) => s + i.qty, 0); $("cnt").textContent = n; $("cnt").hidden = !n; };
 async function boot() {
   const [s, a] = await Promise.all([db.from("settings").select().maybeSingle(), db.from("areas").select().eq("active", true).order("name")]);
   settings = s.data || {}; areas = a.data || [];
@@ -7,20 +7,32 @@ async function boot() {
   save(); route();
 }
 async function route() {
-  const h = location.hash.slice(1); $("seo").hidden = !!h; $("app").innerHTML = '<p class="mut">Memuat…</p>';
+  const h = location.hash.slice(1); $("seo").hidden = !!h; document.body.classList.toggle("focus", h.startsWith("p-") || h == "keranjang"); document.querySelectorAll("nav.bottom a").forEach((x) => x.classList.toggle("on", x.getAttribute("href") === "#" + h)); $("app").innerHTML = '<p class="mut">Memuat…</p>';
   $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "pesanan" ? pesananView() : h == "keranjang" ? checkout() : h == "selesai" && last ? done() : await home();
   scrollTo(0, 0); if (h == "keranjang") upd();
 }
+let prods = [], cats = [], q = "", cat = -1;
+const ico = (c) => /wisuda/i.test(c) ? "🎓" : /romant|anniv|valent/i.test(c) ? "💖" : /ulang|birth/i.test(c) ? "🎂" : /duka|bela/i.test(c) ? "🕊️" : "💐";
+const card = (p) => `<a class="card" href="#p-${p.id}"><div class="ph-wrap">${imgTag(p)}</div><div class="meta"><span class="cn">${esc(p.name)}</span><b class="pr">${rp(p.price)}</b></div></a>`;
+function gridHtml() {
+  const l = prods.filter((p) => (cat < 0 || p.category == cats[cat]) && (p.name + " " + (p.category || "")).toLowerCase().includes(q.toLowerCase()));
+  return l.map(card).join("") || '<p class="mut" style="grid-column:1/-1">Belum ada buket yang cocok. Coba kata kunci lain atau hubungi kami lewat WhatsApp.</p>';
+}
+const catsHtml = () => [["💐", "Semua", -1], ...cats.map((c, i) => [ico(c), c, i])].map(([i, l, n]) => `<button class="cat${n == cat ? " on" : ""}" onclick="setCat(${n})"><span class="ico">${i}</span>${esc(l)}</button>`).join("");
+function paint() { if ($("grid")) { $("cats").innerHTML = catsHtml(); $("grid").innerHTML = gridHtml(); } }
+function setCat(n) { cat = n; paint(); }
+function setQ(v) { q = v; if (location.hash.length > 1) location.hash = ""; else paint(); }
 async function home() {
   const { data } = await db.from("products").select().eq("active", true).order("created_at", { ascending: false });
-  return `<h1>Buket bunga cantik, diantar ke depan pintu</h1><p class="mut">Tanpa akun. Pilih buket, isi alamat, transfer, selesai.</p><div class="grid" style="margin-top:18px">${(data || []).map((p) => `<a class="card" href="#p-${p.id}">${imgTag(p)}<div><b>${esc(p.name)}</b><div class="price">${rp(p.price)}</div></div></a>`).join("")}</div>${data?.length ? "" : '<p class="mut">Belum ada produk.</p>'}`;
+  prods = data || []; cats = [...new Set(prods.map((p) => p.category).filter(Boolean))]; if (cat >= cats.length) cat = -1;
+  return `<div class="banner"><div><b>Buket segar, dikirim sesuai jadwal</b><span>Pilih tanggal dan jam kirim sendiri. Tanpa akun.</span></div><span class="bi">💐</span></div><div class="cats" id="cats">${catsHtml()}</div><div class="sec"><b>Semua buket</b><span>Cibubur, Depok, Bogor dan sekitarnya</span></div><div class="grid" id="grid">${gridHtml()}</div>`;
 }
 async function detail(id) {
   const { data: p } = await db.from("products").select().eq("id", id).eq("active", true).maybeSingle();
   if (!p) return '<p>Produk tidak ditemukan.</p><a class="btn" href="#">Ke katalog</a>';
   const { data: pa } = await db.from("product_addons").select("addons(*)").eq("product_id", id);
   cur = { p, ad: (pa || []).map((x) => x.addons).filter((a) => a && a.active) };
-  return `<div class="det">${imgTag(p)}<div><h1>${esc(p.name)}</h1><p class="price">${rp(p.price)}</p><p>${esc(p.description || "")}</p>
+  return `<a class="back" href="#">‹ Kembali</a><div class="det">${imgTag(p)}<div><h1>${esc(p.name)}</h1><p class="price">${rp(p.price)}</p><p>${esc(p.description || "")}</p>
   ${cur.ad.length ? "<label>Tambahan</label>" + cur.ad.map((a) => `<label class="chk"><input type="checkbox" class="ad" value="${a.id}"> ${esc(a.name)} (+${rp(a.price)})</label>`).join("") : ""}
   <label for="qty">Jumlah</label><input id="qty" type="number" min="1" value="1"><button class="btn" onclick="addCart()">Tambah ke keranjang</button></div></div>`;
 }
