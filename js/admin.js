@@ -50,16 +50,23 @@ async function saveP() {
   if ((f.aids || []).length) await db.from("product_addons").insert(f.aids.map((a) => ({ product_id: sv.id, addon_id: a })));
   f = { active: true }; produk();
 }
-let sf = "Semua"; const STC = { "Menunggu pembayaran": 0, Diproses: 1, Dikirim: 2, Selesai: 3, Batal: 4 };
+let ordAll = [], sf = "Semua"; const STC = { "Menunggu pembayaran": 0, Diproses: 1, Dikirim: 2, Selesai: 3, Batal: 4 };
 const setSf = (v) => { sf = v; pesanan(); };
 async function pesanan() {
   const { data: o } = await db.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
-  const all = o || [], l = sf == "Semua" ? all : all.filter((x) => x.status == sf), n = (s) => s == "Semua" ? all.length : all.filter((x) => x.status == s).length;
+  ordAll = o || []; const all = ordAll, l = sf == "Semua" ? all : all.filter((x) => x.status == sf), n = (s) => s == "Semua" ? all.length : all.filter((x) => x.status == s).length;
   const tm = (d) => new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   $("app").innerHTML = `<h1>Pesanan</h1><div class="chips">${["Semua", ...ST].map((s) => `<button class="chip${s == sf ? " on" : ""}" onclick="setSf('${s}')">${s}<i>${n(s)}</i></button>`).join("")}</div>` + (l.map((x) => `<div class="box ord"><div class="oh"><div><b>${esc(x.no)}</b> <span class="mut">${tm(x.created_at)}</span></div><span class="st st${STC[x.status] ?? 0}">${esc(x.status)}</span></div>
   <div class="og"><div><span class="lb">Pemesan</span>${esc(x.name)}<br><span class="mut">${esc(x.phone)}</span></div><div><span class="lb">Kirim</span>${esc(x.deliver_on)} · ${esc(x.deliver_slot)}<br><span class="mut">${esc(x.area)}</span></div><div><span class="lb">Alamat</span>${esc(x.address)}</div></div>
   <div class="oi">${(x.order_items || []).map((i) => `<div>${i.qty}× ${esc(i.product_name)}${i.addons?.length ? " + " + esc(i.addons.join(", ")) : ""}</div>`).join("")}</div>${x.card_message ? `<div class="ocard"><b>Kartu ucapan</b><br>${esc(x.card_message).replace(/\n/g, "<br>")}</div>` : ""}
-  <div class="of"><b class="price">${rp(x.total)}</b>${x.promo_code ? `<span class="mut">Promo ${esc(x.promo_code)}: −${rp(x.discount)}</span>` : ""}<span class="sp"></span><select onchange="setSt('${x.id}',this.value)">${ST.map((s) => `<option ${s == x.status ? "selected" : ""}>${s}</option>`).join("")}</select><a class="btn alt sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/^0/, "62")}">WhatsApp</a></div></div>`).join("") || '<p class="mut">Tidak ada pesanan.</p>');
+  <div class="of"><b class="price">${rp(x.total)}</b>${x.promo_code ? `<span class="mut">Promo ${esc(x.promo_code)}: −${rp(x.discount)}</span>` : ""}<span class="sp"></span><select onchange="setSt('${x.id}',this.value)">${ST.map((s) => `<option ${s == x.status ? "selected" : ""}>${s}</option>`).join("")}</select><a class="btn alt sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/^0/, "62")}">WhatsApp</a><button class="btn alt sm" onclick="delO('${x.id}')">Hapus</button></div></div>`).join("") || '<p class="mut">Tidak ada pesanan.</p>');
+}
+async function delO(id) {
+  const x = ordAll.find((o) => o.id == id); if (!x) return;
+  if (!confirm(`Hapus pesanan ${x.no} a.n. ${x.name} (${rp(x.total)})?\n\nPesanan dihapus permanen dan tidak dihitung lagi di laporan. Kalau pesanan hanya dibatalkan, lebih baik ubah statusnya jadi Batal.`)) return;
+  const y = scrollY, { data, error } = await db.from("orders").delete().eq("id", id).select();
+  if (error || !data?.length) return alert("Gagal menghapus pesanan.");
+  await pesanan(); scrollTo(0, y);
 }
 async function setSt(id, s) { const y = scrollY; await db.from("orders").update({ status: s }).eq("id", id); await pesanan(); scrollTo(0, y); }
 
