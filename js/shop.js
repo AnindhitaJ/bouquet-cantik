@@ -9,10 +9,10 @@ async function boot() {
   save(); route();
 }
 async function route() {
-  const h = location.hash.slice(1); $("seo").hidden = !!h; document.body.classList.remove("s");
+  clearInterval(bnTimer); const h = location.hash.slice(1); $("seo").hidden = !!h; document.body.classList.remove("s");
   $("app").innerHTML = '<p class="mut">Memuat…</p>';
   $("app").innerHTML = h.startsWith("p-") ? await detail(h.slice(2)) : h == "pesanan" ? pesananView() : h == "keranjang" ? cartView() : h == "checkout" ? checkout() : h == "selesai" && last ? done() : await home();
-  scrollTo(0, 0); if (h == "checkout") upd(); if (h == "keranjang") updCart(); if (!h) setBand();
+  scrollTo(0, 0); if (h == "checkout") upd(); if (h == "keranjang") updCart(); if (!h) { setBand(); initSlider(); }
 }
 const ico = (c) => /wisuda/i.test(c) ? "🎓" : /romant|anniv|valent/i.test(c) ? "💖" : /ulang|birth/i.test(c) ? "🎂" : /duka|bela/i.test(c) ? "🕊️" : "💐";
 const thumb = (c) => { const p = prods.find((x) => x.category == c && x.image_url); return p ? `<img src="${esc(p.image_url)}" alt="">` : ico(c); };
@@ -33,14 +33,25 @@ function paint() { if ($("grid")) { $("cats").innerHTML = catsHtml(); $("grid").
 function setCat(n) { cat = n; paint(); }
 function setQ(v) { q = v; if (location.hash.length > 1) location.hash = ""; else paint(); }
 const setBand = () => { const a = prods.filter((p) => p.image_url), b = a[1] || a[0]; if (b && $("band-art")) $("band-art").innerHTML = `<img src="${esc(b.image_url)}" alt="" loading="lazy">`; };
+let bnTimer = null;
+const sliderHtml = (bs) => bs.length ? `<div class="bn" role="region" aria-roledescription="carousel" aria-label="Banner"><div class="bn-track" id="bnt">${bs.map((b, i) => { const ok = b.product_id && prods.some((p) => p.id == b.product_id); const inner = `<img src="${esc(b.image_url)}" alt="${esc(b.title || "Banner")}"${i ? ' loading="lazy"' : ""}>${b.title || b.subtitle ? `<div class="bn-txt">${b.title ? `<b>${esc(b.title)}</b>` : ""}${b.subtitle ? `<span>${esc(b.subtitle)}</span>` : ""}</div>` : ""}`; return ok ? `<a class="bs" href="#p-${b.product_id}">${inner}</a>` : `<div class="bs">${inner}</div>`; }).join("")}</div>${bs.length > 1 ? `<button class="bn-a l" onclick="bnGo(-1)" aria-label="Sebelumnya">‹</button><button class="bn-a r" onclick="bnGo(1)" aria-label="Berikutnya">›</button><div class="bn-d" id="bnd">${bs.map((_, i) => `<i${i ? "" : ' class="on"'}></i>`).join("")}</div>` : ""}</div>` : "";
+const bnGo = (d) => { const t = $("bnt"); if (!t) return; const n = t.children.length, i = Math.round(t.scrollLeft / t.clientWidth); t.scrollTo({ left: ((i + d + n) % n) * t.clientWidth, behavior: "smooth" }); };
+function initSlider() {
+  clearInterval(bnTimer); const t = $("bnt"); if (!t) return;
+  t.addEventListener("scroll", () => { const i = Math.round(t.scrollLeft / t.clientWidth); document.querySelectorAll("#bnd i").forEach((d, k) => d.classList.toggle("on", k == i)); }, { passive: true });
+  if (t.children.length < 2 || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const box = t.parentNode, run = () => { clearInterval(bnTimer); bnTimer = setInterval(() => bnGo(1), 5000); };
+  run(); ["pointerdown", "mouseenter", "focusin"].forEach((e) => box.addEventListener(e, () => clearInterval(bnTimer))); ["mouseleave", "pointerup"].forEach((e) => box.addEventListener(e, run));
+}
 const toCat = () => $("katalog").scrollIntoView({ behavior: "smooth" });
 async function home() {
-  const { data } = await db.from("products").select().eq("active", true).order("created_at", { ascending: false });
+  const [{ data }, { data: bn }] = await Promise.all([db.from("products").select().eq("active", true).order("created_at", { ascending: false }), db.from("banners").select().eq("active", true).order("sort_order").order("created_at", { ascending: false })]);
   prods = data || []; cats = [...new Set(prods.map((p) => p.category).filter(Boolean))]; if (cat >= cats.length) cat = -1;
   const hp = prods.find((p) => p.image_url);
   const ic = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
   const T = [[ic('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'), "Atur Jadwal Pengiriman", "Tentukan sendiri tanggal dan waktu pengiriman sesuai kebutuhanmu."], [ic('<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 8l9 6 9-6"/>'), "Tambahkan Kartu Ucapan", "Sisipkan pesan personal untuk membuat hadiahmu semakin berkesan."], [ic('<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>'), "Pesan Tanpa Registrasi", "Tidak perlu membuat akun. Langsung pilih buket dan pesan."], [ic('<path d="M21 12a8 8 0 0 1-11.7 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'), "Konfirmasi via WhatsApp", "Lanjutkan konfirmasi dan pembayaran dengan praktis lewat WhatsApp."]];
-  return `<section class="hero"><div><h1>Buket Bunga untuk Setiap Momen Istimewa</h1><p>Dari ucapan selamat hingga kejutan untuk orang tersayang, temukan buket yang tepat untuk setiap cerita.</p><a class="btn" href="#" onclick="toCat();return false">Lihat Koleksi Buket</a></div><div class="hero-img">${hp ? `<img src="${esc(hp.image_url)}" alt="${esc(hp.name)}">` : "<span>💐</span>"}</div></section>
+  const bs = (bn || []).filter((b) => b.image_url);
+  return `${sliderHtml(bs)}<section class="hero${bs.length ? " one" : ""}"><div><h1>Buket Bunga untuk Setiap Momen Istimewa</h1><p>Dari ucapan selamat hingga kejutan untuk orang tersayang, temukan buket yang tepat untuk setiap cerita.</p><a class="btn" href="#" onclick="toCat();return false">Lihat Koleksi Buket</a></div>${bs.length ? "" : `<div class="hero-img">${hp ? `<img src="${esc(hp.image_url)}" alt="${esc(hp.name)}">` : "<span>💐</span>"}</div>`}</section>
   <h2 class="sech">Temukan Buket Favoritmu</h2><div class="cats" id="cats">${catsHtml()}</div>
   <div class="bar" id="katalog"><span id="cn">${prods.length} buket</span><label class="sort">Urutkan <select onchange="sort=this.value;paint()">${[["new", "Terbaru"], ["lo", "Harga terendah"], ["hi", "Harga tertinggi"]].map(([v, l]) => `<option value="${v}"${v == sort ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
   <div class="grid" id="grid">${gridHtml()}</div>
@@ -79,12 +90,13 @@ function cartView() {
   <aside class="sumbox"><label for="pr">Kode promo</label><input id="pr" value="${esc(promo)}" oninput="promo=this.value.trim()"><label for="ca">Area pengiriman</label><select id="ca" onchange="setArea(this.value)"><option value="">Pilih area untuk lihat ongkir</option>${areas.map((a) => `<option${a.name == selArea ? " selected" : ""}>${esc(a.name)}</option>`).join("")}</select><div class="sum" style="margin-top:12px"><span>Subtotal</span><span>${rp(sub())}</span></div><div class="sum"><span>Perkiraan ongkir</span><span id="cok"></span></div><div class="sum tot"><span>Estimasi total</span><b id="ctt"></b></div><p class="mut" style="font-size:13px">Potongan promo diterapkan saat pesanan dibuat. Pembayaran lewat transfer dan dikonfirmasi via WhatsApp.</p><a class="btn blk" href="#checkout">Lanjutkan Pemesanan</a></aside></div>`;
 }
 const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const wibNow = () => new Date(Date.now() + 7 * 36e5), wibHour = () => wibNow().getUTCHours();
 const mark = () => document.querySelectorAll(".dc").forEach((b) => b.classList.toggle("on", b.dataset.d == $("tg").value));
 const pickD = (v) => { $("tg").value = v; mark(); };
 const pickT = (b) => { $("jm").value = b.dataset.t; document.querySelectorAll(".tc").forEach((x) => x.classList.toggle("on", x === b)); };
 function checkout() {
   if (!cart.length) return cartView();
-  const cut = new Date().getHours() >= (CFG.CUTOFF_HOUR ?? 15);
+  const cut = wibHour() >= (CFG.CUTOFF_HOUR ?? 15);
   const days = [...Array(7)].map((_, i) => { const d = new Date(Date.now() + i * 864e5); return `<button type="button" class="dc" data-d="${ymd(d)}"${i == 0 && cut ? " disabled" : ""} onclick="pickD('${ymd(d)}')"><b>${i == 0 ? "Hari ini" : i == 1 ? "Besok" : d.toLocaleDateString("id-ID", { weekday: "short" })}</b><span>${d.toLocaleDateString("id-ID", { day: "numeric", month: "short" })}</span></button>`; }).join("");
   const slots = [["Pagi", "09.00–12.00"], ["Siang", "12.00–15.00"], ["Sore", "15.00–18.00"]].map(([n, t], i) => `<button type="button" class="tc${i ? "" : " on"}" data-t="${t}" onclick="pickT(this)"><b>${n}</b><span>${t}</span></button>`).join("");
   return `<a class="back" href="#keranjang">‹ Kembali ke keranjang</a><h1>Detail Pemesanan</h1><div class="two-col"><div>
@@ -99,7 +111,7 @@ function upd() {
   $("sb").textContent = rp(s); $("ok").textContent = rp(f); $("tt").textContent = rp(s + f);
 }
 async function submit() {
-  const v = (i) => $(i).value.trim(); $("err").textContent = ""; $("go").disabled = true;
+  const v = (i) => $(i).value.trim(); $("err").textContent = ""; if (v("tg") && v("tg") == wibNow().toISOString().slice(0, 10) && wibHour() >= (CFG.CUTOFF_HOUR ?? 15)) { $("err").textContent = "Pesanan untuk hari ini sudah ditutup. Silakan pilih tanggal kirim besok atau setelahnya."; return; } $("go").disabled = true;
   const kartu = cart.filter((i) => i.to || i.from || i.msg).map((i) => `${i.name}: untuk ${i.to || "-"}, dari ${i.from || "-"}. ${i.msg || ""}`).join("\n");
   const { data, error } = await db.rpc("create_order", { p: { name: v("nm"), phone: v("hp"), area: v("ar"), address: v("al"), deliverOn: v("tg"), slot: v("jm"), card: kartu, promo, items: cart } });
   $("go").disabled = false; if (error) { $("err").textContent = error.message; return; }

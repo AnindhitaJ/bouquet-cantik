@@ -1,11 +1,12 @@
 const ST = ["Menunggu pembayaran", "Diproses", "Dikirim", "Selesai", "Batal"]; let f = { active: true };
 async function init() {
   const { data } = await db.auth.getSession(); const ok = !!data.session; $("nav").hidden = !ok;
-  if (!ok) return $("app").innerHTML = `<div class="box" style="max-width:380px;margin:40px auto"><h1>Masuk</h1><label for="em">Email</label><input id="em" type="email"><label for="pw">Password</label><input id="pw" type="password"><div class="err" id="err"></div><button class="btn" onclick="login()">Masuk</button></div>`;
+  document.body.classList.toggle("loggedout", !ok);
+  if (!ok) { $("app").innerHTML = `<div class="login"><div class="box"><div class="brand2">BOUQUET CANTIK<small>Admin</small></div><label for="em">Email</label><input id="em" type="email" autocomplete="username"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')login()"><div class="err" id="err"></div><button class="btn blk" onclick="login()">Masuk</button></div></div>`; return; }
   tab("produk");
 }
 async function login() { const { error } = await db.auth.signInWithPassword({ email: $("em").value, password: $("pw").value }); error ? $("err").textContent = "Email atau password salah." : init(); }
-const tab = (t) => ({ produk, pesanan, laporan, addon, promo, pengaturan })[t]();
+const tab = (t) => { document.querySelectorAll("#nav a[data-t]").forEach((a) => a.classList.toggle("on", a.dataset.t == t)); return ({ produk, banner, pesanan, laporan, addon, promo, pengaturan })[t](); };
 async function produk() {
   const { data: l } = await db.from("products").select().order("created_at", { ascending: false });
   const { data: ad } = await db.from("addons").select().order("name");
@@ -14,13 +15,13 @@ async function produk() {
   <label for="pd">Deskripsi</label><textarea id="pd" rows="2">${esc(f.description)}</textarea><label for="pf">Foto (maks. 6, foto pertama jadi foto utama)</label><input id="pf" type="file" accept="image/*" multiple onchange="upload(this.files)"><div class="thumbs">${imgs(f).map((u, i) => `<div><img src="${esc(u)}" alt=""><span><button type="button" class="btn alt sm" onclick="fotoUtama(${i})">Utama</button><button type="button" class="btn alt sm" onclick="fotoHapus(${i})">Hapus</button></span></div>`).join("")}</div>
   ${(ad || []).length ? "<label>Add-on yang tersedia</label>" + ad.map((a) => `<label class="chk"><input type="checkbox" class="pad" value="${a.id}" ${(f.aids || []).includes(a.id) ? "checked" : ""}> ${esc(a.name)} (+${rp(a.price)})</label>`).join("") : ""}
   <label class="chk"><input id="pa" type="checkbox" ${f.active ? "checked" : ""}> Tampil di toko</label><p class="mut" id="msg"></p><button class="btn" onclick="saveP()">${f.id ? "Simpan perubahan" : "Tambah produk"}</button></div>
-  ${(l || []).map((p) => `<div class="box sum"><span><b>${esc(p.name)}</b> ${p.active ? "" : "(disembunyikan)"}<br><span class="price">${rp(p.price)}</span></span><span><button class="btn alt sm" onclick='edit(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Ubah</button> <button class="btn alt sm" onclick="delP('${p.id}')">Hapus</button></span></div>`).join("")}`;
+  ${(l || []).map((p) => `<div class="box pl">${imgs(p)[0] ? `<img class="th2" src="${esc(imgs(p)[0])}" alt="">` : '<div class="th2">💐</div>'}<div class="pi"><b>${esc(p.name)}</b>${p.active ? "" : ' <span class="st st4">Disembunyikan</span>'}<div class="mut">${esc(p.category || "Tanpa kategori")}</div><div><span class="price">${rp(p.price)}</span>${p.compare_price > p.price ? ` <s class="was">${rp(p.compare_price)}</s>` : ""}</div></div><div class="pa"><button class="btn alt sm" onclick='edit(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Ubah</button><button class="btn alt sm" onclick="delP('${p.id}')">Hapus</button></div></div>`).join("") || '<p class="mut">Belum ada produk.</p>'}`;
 }
 function edit(p) { f = p; produk(); scrollTo(0, 0); }
 function keep() { f = { ...f, name: $("pn").value, category: $("pc").value, price: +$("pp").value, compare_price: +$("pcmp").value || null, description: $("pd").value, active: $("pa").checked, aids: [...document.querySelectorAll(".pad:checked")].map((x) => x.value) }; }
 async function delP(id) { if (confirm("Hapus produk?")) { await db.from("products").delete().eq("id", id); produk(); } }
-async function toWebp(file) {
-  const bm = await createImageBitmap(file), r = Math.min(1, 1000 / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
+async function toWebp(file, max = 1000) {
+  const bm = await createImageBitmap(file), r = Math.min(1, max / Math.max(bm.width, bm.height)), c = document.createElement("canvas");
   c.width = bm.width * r; c.height = bm.height * r; c.getContext("2d").drawImage(bm, 0, 0, c.width, c.height);
   return new Promise((res) => c.toBlob(res, "image/webp", 0.82));
 }
@@ -49,13 +50,18 @@ async function saveP() {
   if ((f.aids || []).length) await db.from("product_addons").insert(f.aids.map((a) => ({ product_id: sv.id, addon_id: a })));
   f = { active: true }; produk();
 }
+let sf = "Semua"; const STC = { "Menunggu pembayaran": 0, Diproses: 1, Dikirim: 2, Selesai: 3, Batal: 4 };
+const setSf = (v) => { sf = v; pesanan(); };
 async function pesanan() {
   const { data: o } = await db.from("orders").select("*, order_items(*)").order("created_at", { ascending: false });
-  $("app").innerHTML = "<h1>Pesanan</h1>" + ((o || []).map((x) => `<div class="box"><div class="sum"><b>${esc(x.no)} · ${esc(x.name)}</b><span class="price">${rp(x.total)}</span></div><div class="mut">${esc(x.phone)} · ${esc(x.area)} · kirim ${esc(x.deliver_on)} ${esc(x.deliver_slot)}</div><div>${esc(x.address)}</div>${x.card_message ? `<div class="mut">Kartu: ${esc(x.card_message)}</div>` : ""}
-  ${(x.order_items || []).map((i) => `<div>${i.qty}× ${esc(i.product_name)}${i.addons?.length ? " + " + esc(i.addons.join(", ")) : ""}</div>`).join("")}${x.promo_code ? `<div class="mut">Promo ${esc(x.promo_code)}: −${rp(x.discount)}</div>` : ""}
-  <div class="sum" style="margin-top:8px"><select style="width:auto" onchange="setSt('${x.id}',this.value)">${ST.map((s) => `<option ${s == x.status ? "selected" : ""}>${s}</option>`).join("")}</select><a class="btn alt sm" target="_blank" rel="noopener" href="https://wa.me/${x.phone.replace(/^0/, "62")}">WhatsApp</a></div></div>`).join("") || '<p class="mut">Belum ada pesanan.</p>');
+  const all = o || [], l = sf == "Semua" ? all : all.filter((x) => x.status == sf), n = (s) => s == "Semua" ? all.length : all.filter((x) => x.status == s).length;
+  const tm = (d) => new Date(d).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  $("app").innerHTML = `<h1>Pesanan</h1><div class="chips">${["Semua", ...ST].map((s) => `<button class="chip${s == sf ? " on" : ""}" onclick="setSf('${s}')">${s}<i>${n(s)}</i></button>`).join("")}</div>` + (l.map((x) => `<div class="box ord"><div class="oh"><div><b>${esc(x.no)}</b> <span class="mut">${tm(x.created_at)}</span></div><span class="st st${STC[x.status] ?? 0}">${esc(x.status)}</span></div>
+  <div class="og"><div><span class="lb">Pemesan</span>${esc(x.name)}<br><span class="mut">${esc(x.phone)}</span></div><div><span class="lb">Kirim</span>${esc(x.deliver_on)} · ${esc(x.deliver_slot)}<br><span class="mut">${esc(x.area)}</span></div><div><span class="lb">Alamat</span>${esc(x.address)}</div></div>
+  <div class="oi">${(x.order_items || []).map((i) => `<div>${i.qty}× ${esc(i.product_name)}${i.addons?.length ? " + " + esc(i.addons.join(", ")) : ""}</div>`).join("")}</div>${x.card_message ? `<div class="ocard"><b>Kartu ucapan</b><br>${esc(x.card_message).replace(/\n/g, "<br>")}</div>` : ""}
+  <div class="of"><b class="price">${rp(x.total)}</b>${x.promo_code ? `<span class="mut">Promo ${esc(x.promo_code)}: −${rp(x.discount)}</span>` : ""}<span class="sp"></span><select onchange="setSt('${x.id}',this.value)">${ST.map((s) => `<option ${s == x.status ? "selected" : ""}>${s}</option>`).join("")}</select><a class="btn alt sm" target="_blank" rel="noopener" href="https://wa.me/${String(x.phone).replace(/^0/, "62")}">WhatsApp</a></div></div>`).join("") || '<p class="mut">Tidak ada pesanan.</p>');
 }
-async function setSt(id, s) { await db.from("orders").update({ status: s }).eq("id", id); }
+async function setSt(id, s) { const y = scrollY; await db.from("orders").update({ status: s }).eq("id", id); await pesanan(); scrollTo(0, y); }
 
 const tog = async (t, id, v, fn) => { await db.from(t).update({ active: v }).eq("id", id); fn(); };
 const rm = async (t, id, fn) => { if (confirm("Hapus?")) { await db.from(t).delete().eq("id", id); fn(); } };
@@ -102,4 +108,34 @@ function csv() {
   const r = ["No,Tanggal,Nama,HP,Area,Item,Total,Status"].concat(allO.map((o) => [o.no, o.created_at.slice(0, 10), o.name, o.phone, o.area, (o.order_items || []).map((i) => i.qty + "x " + i.product_name).join("; "), o.total, o.status].map(q).join(",")));
   const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([r.join("\n")], { type: "text/csv" })); a.download = "laporan-bouquet-cantik.csv"; a.click();
 }
+let bf = { src: "upload" }, bnl = [], pdl = [];
+const bKeep = () => { if ($("bt")) { bf.title = $("bt").value; bf.subtitle = $("bs").value; } if ($("bl")) bf.product_id = $("bl").value || null; };
+const bSrc = (v) => { bKeep(); bf = { ...bf, src: v, image_url: null, product_id: null }; banner(); };
+function bPick(id) { bKeep(); const p = pdl.find((x) => x.id == id); bf.product_id = id || null; bf.image_url = p ? imgs(p)[0] || null : null; if (p && !bf.title) bf.title = p.name; banner(); }
+async function bUp(file) {
+  if (!file) return; bKeep(); $("bm").textContent = "Mengunggah banner…";
+  try {
+    const { data } = await db.auth.getSession();
+    const r = await fetch(CFG.UPLOAD_URL, { method: "PUT", headers: { "Content-Type": "image/webp", Authorization: "Bearer " + data.session.access_token }, body: await toWebp(file, 1600) });
+    if (!r.ok) throw new Error("HTTP " + r.status + " " + (await r.text()));
+    bf.image_url = (await r.json()).url; await banner();
+  } catch (e) { $("bm").textContent = "Upload gagal: " + (e.message && e.message != "Failed to fetch" ? e.message : "diblokir browser (CORS) atau Worker tidak terjangkau"); }
+}
+async function banner() {
+  const [{ data: l, error }, { data: ps }] = await Promise.all([db.from("banners").select().order("sort_order").order("created_at", { ascending: false }), db.from("products").select("id,name,image_url,images").order("name")]);
+  if (error) { $("app").innerHTML = '<h1>Banner</h1><div class="err">Tabel banner belum ada. Jalankan tambahan_banner.sql di SQL Editor Supabase.</div>'; return; }
+  bnl = l || []; pdl = ps || [];
+  const opt = (sel) => pdl.map((p) => `<option value="${p.id}"${p.id == sel ? " selected" : ""}>${esc(p.name)}</option>`).join("");
+  const pv = bf.image_url ? `<img class="bprev" src="${esc(bf.image_url)}" alt="">` : "";
+  $("app").innerHTML = `<h1>Banner</h1><div class="box"><div class="chips">${[["upload", "Upload gambar"], ["product", "Ambil dari produk"]].map(([v, t]) => `<button class="chip${bf.src == v ? " on" : ""}" onclick="bSrc('${v}')">${t}</button>`).join("")}</div>
+  ${bf.src == "upload" ? `<label for="bi">Gambar banner</label><input id="bi" type="file" accept="image/*" onchange="bUp(this.files[0])"><p class="mut" style="font-size:13px;margin:6px 0 0">Disarankan 1600×600 px, bagian penting di tengah gambar.</p>${pv}<label for="bl">Tautkan ke produk (opsional)</label><select id="bl"><option value="">Tanpa tautan</option>${opt(bf.product_id)}</select>` : `<label for="bp">Pilih produk</label><select id="bp" onchange="bPick(this.value)"><option value="">Pilih produk…</option>${opt(bf.product_id)}</select><p class="mut" style="font-size:13px;margin:6px 0 0">Foto utama produk dipakai sebagai banner dan mengarah ke halaman produknya.</p>${pv}`}
+  <label for="bt">Judul (opsional)</label><input id="bt" value="${esc(bf.title)}"><label for="bs">Teks kecil (opsional)</label><input id="bs" value="${esc(bf.subtitle)}"><p class="mut" id="bm"></p><button class="btn" onclick="saveB()">Tambah banner</button></div>
+  ${bnl.map((b, i) => `<div class="box bl"><img class="bth" src="${esc(b.image_url)}" alt=""><div class="pi"><b>${esc(b.title || "(tanpa judul)")}</b>${b.active ? "" : ' <span class="st st4">Nonaktif</span>'}<div class="mut">${esc(b.subtitle || "")}</div><div class="mut">${b.product_id ? "Menuju: " + esc(pdl.find((p) => p.id == b.product_id)?.name || "produk") : "Tanpa tautan"}</div></div><div class="pa"><button class="btn alt sm" ${i ? "" : "disabled"} onclick="moveB(${i},-1)" aria-label="Naik">▲</button><button class="btn alt sm" ${i < bnl.length - 1 ? "" : "disabled"} onclick="moveB(${i},1)" aria-label="Turun">▼</button><button class="btn alt sm" onclick="tog('banners','${b.id}',${!b.active},banner)">${b.active ? "Nonaktifkan" : "Aktifkan"}</button><button class="btn alt sm" onclick="rm('banners','${b.id}',banner)">Hapus</button></div></div>`).join("") || '<p class="mut">Belum ada banner.</p>'}`;
+}
+async function saveB() {
+  bKeep(); if (!bf.image_url) return $("bm").textContent = "Pilih gambar atau produk dulu.";
+  const { error } = await db.from("banners").insert({ image_url: bf.image_url, title: bf.title || null, subtitle: bf.subtitle || null, product_id: bf.product_id || null, sort_order: bnl.length });
+  if (error) return $("bm").textContent = "Gagal menyimpan banner."; bf = { src: bf.src }; banner();
+}
+async function moveB(i, d) { const a = [...bnl], j = i + d; [a[i], a[j]] = [a[j], a[i]]; await Promise.all(a.map((b, k) => db.from("banners").update({ sort_order: k }).eq("id", b.id))); banner(); }
 init();
